@@ -1,0 +1,109 @@
+---
+
+- name: Install httpd
+  become:  true
+  yum:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - httpd
+    - python-virtualenv
+    #- pyOpenSSL # < 0.13 pas disponible sur centos 7
+
+- name: Pull NGINX and docker-registry containers
+  become:  true
+  docker_image:
+    name: "{{ item }}"
+  with_items:
+    - registry
+    - nginx
+
+- name: Create docker-registry directory and nginx/data subdirectories
+  become:  true
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0755
+  with_items:
+    - "{{ nginx_config_folfder }}"
+    - "{{ docker_registry_data_folder }}"
+
+- name: Copy docker-compose.yml in docker_registry_folder
+  become:  true
+  copy:
+    src: docker-compose.yml
+    dest: "{{ docker_registry_folder }}"
+
+- name: Copy NGINX config file in docker
+  become:  true
+  template:
+    src: registry.conf.j2
+    dest: "{{ nginx_config_folfder }}/registry.conf"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Installe pip for virtualenv
+  become: true
+  pip:
+    name: pyOpenSSL
+
+- name: Generate private key
+  become: true
+  openssl_privatekey:
+    path: "{{ nginx_config_folfder }}/{{ docker_registry_key_name }}"
+
+- name: Generate Certificate Signing Request
+  become: true
+  openssl_csr:
+    path: "{{ nginx_config_folfder }}/{{ docker_registry_csr_name }}"
+    privatekey_path: "{{ nginx_config_folfder }}/{{ docker_registry_key_name }}"
+    common_name: "{{ docker_registry_fqdn }}"
+
+
+#  ne pas executer si il existe des certificats
+# openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout docker-registry.key -out docker-registry.crt
+
+- name: Generate self-signed certificate for registry web access
+  become:  true
+  openssl_certificate:
+    path: "{{ nginx_config_folfder }}/{{ docker_registry_cert_name }}"
+    privatekey_path: "{{ nginx_config_folfder }}/{{ docker_registry_key_name }}"
+    csr_path: "{{ nginx_config_folfder }}/{{ docker_registry_csr_name }}"
+    provider: selfsigned
+
+- name: Copy docker-compose-registry.service in /lib/systemd/system
+  become:  true
+  template:
+    src: lib/systemd/system/docker-compose-registry-template.service.j2
+    dest: "/lib/systemd/system/{{ docker_compose_registry_service_name }}.service"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Create registry user
+  become:  true
+  shell:
+    "htpasswd -bc {{ nginx_config_folfder }}/{{ registry_password_file }} {{ docker_user_name }} {{ docker_user_password }}"
+
+- name: Force systemd to reread configs
+  become:  true
+  systemd:
+    daemon_reload: yes
+
+- name: Enable service docker-compose-registry and ensure it is not masked
+  become:  true
+  systemd:
+    name: "{{ docker_compose_registry_service_name }}"
+    enabled: yes
+    masked: no
+
+- name: Make sure docker-composer-registry service is running
+  become:  true
+  systemd:
+    state: started
+    name: "{{ docker_compose_registry_service_name }}"
+#
+# - name:
+#   docker_service:
+#     project_src: path/to/project

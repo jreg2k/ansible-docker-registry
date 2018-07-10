@@ -1,0 +1,19 @@
+docker_registry_folder: '/docker-registry2'
+docker_registry_data_folder: '{{ docker_registry_folder }}/data'
+nginx_config_folfder: '{{ docker_registry_folder }}/nginx'
+nginx_config_file: '{{ nginx_config_folfder }}/registry.conf'
+
+# pour l'accès via http
+docker_registry_fqdn: "docker-registry2.localdomain"
+authentication_title: "registry.localhost"
+registry_password_file: "registry.password"
+docker_registry_cert_name: "docker_registry.crt"
+docker_registry_key_name: "docker_registry.key"
+docker_registry_csr_name: "docker_registry.csr"
+docker_compose_registry_service_name: "docker-compose-registry2"
+
+docker_user_name: james
+docker_user_password: james
+
+# hostname de la machine qui heberge le registre docker
+docker_registry_hostname: "docker-registry2"
